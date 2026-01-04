@@ -1,5 +1,7 @@
 # ClipBarrel
-ClipBarrel is an AutoHotkey v2 clipboard manager that works alongside the normal Windows clipboard, letting you copy multiple items to a GUI window and paste them in any order.
+ClipBarrel is an [AutoHotkey v2](https://www.autohotkey.com/) clipboard manager that works alongside the normal Windows clipboard, letting you copy multiple items to a GUI window and paste them in any order.
+
+![](https://github.com/Cordarian/ClipBarrel/ClipBarrel demo.gif)
 
 ## Hotkeys
 - **Win+c**: Copy to ClipBarrel
@@ -19,3 +21,7 @@ ClipBarrel is an AutoHotkey v2 clipboard manager that works alongside the normal
 
 ## ClipCounter
 ClipCounter increments the number/letter inside the {braces} with each paste, E.G., "Chapter 1", "Chapter 2", "Chapter 3". Count by numbers, uppercase, or lowercase letters, and increment by any number of steps. Currently lacks data validation, so play nice.
+
+## How does it work?
+
+This stand-alone tool is written in AutoHotkey v2. You can download and run the .exe file by itself, or view the whole code in the .ahk file, which can be run without the .exe using [AutoHotkey](https://www.autohotkey.com/).
