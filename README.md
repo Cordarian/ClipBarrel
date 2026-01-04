@@ -1,7 +1,7 @@
 # ClipBarrel
 ClipBarrel is an [AutoHotkey v2](https://www.autohotkey.com/) clipboard manager that works alongside the normal Windows clipboard, letting you copy multiple items to a GUI window and paste them in any order.
 
-![](https://github.com/Cordarian/ClipBarrel/ClipBarrel%20demo.gif)
+![GIF showing ClipBarrel cut some text, split it into separate items, and paste a sentence in order using destructive and non-destructive pastes.](https://github.com/Cordarian/ClipBarrel/blob/main/ClipBarrel%20demo.gif?raw=true)
 
 ## Hotkeys
 - **Win+c**: Copy to ClipBarrel
