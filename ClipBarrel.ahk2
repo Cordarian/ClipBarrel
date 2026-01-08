@@ -15,14 +15,15 @@ Cliptionary shape:
 Cliptionary[line_key] := {clip_text, clip_all}
 */
 Global A_Return := "`r`n"
-Global A_Tab_Spaces := A_Space A_Space A_Space A_Space
 Global prior_paste := A_Return
 Global this_paste := ClipboardAll()
 Global alphabet := "abcdefghijklmnopqrstuvwxyz"
+Global A_Tab_Spaces := A_Space A_Space A_Space A_Space
 
 Global line_text_header := "Line text" A_Tab_Spaces A_Tab_Spaces A_Tab_Spaces A_Tab_Spaces A_Tab_Spaces
 Global alpha_reverse := False
 Global copy_reverse := True
+Global stream_fallback := "Settings-" A_Username ".ini"
 
 ; GUI constants -------------------------------------------
 Global fontPoint := 10
@@ -74,7 +75,7 @@ Global transparency_level := 150
 }
 
 ; Pastes the previous clipboard
-#z:: {
+#z::{
 	Global
 	Local clip_holder := [
 		this_paste,
@@ -189,53 +190,45 @@ Global transparency_level := 150
 
 #HotIf WinExist("ClipBarrel - ClipCounter: ") ; ClipCounter only
 ; ClipCounter paste
-#v:: ClipCounter_Paste()
+#v::ClipCounter_Paste()
 
 
 #HotIf !WinExist("ClipBarrel - ") ; If ClipBarrel isn't active
 ; Normal paste in case user tries #v without actually copying anything to ClipBarrel
-#v:: Send("^v")
+#v::Send("^v")
 #HotIf
 
 
 ; =========================================================
 ; FUNCTIONS
 ; =========================================================
-ClipChanged(DataType) {
-	Global
-	If !(prior_paste = A_Clipboard or this_paste = A_Clipboard) {
-		prior_paste := this_paste
-	}
-	this_paste := A_Clipboard
-	ClipChange := True
-}
-
-ClipSave()
+; GENERAL =================================================
+ClipSave(duration := 1)
 ; Stores the current clipboard for later restoration
 {
-	Global ClipChange ;
+	Global ClipChange ; This comment prevents line formatting
 	ClipChange := ""
 	Global ClipSaveText
 	ClipSaveText := A_Clipboard
 	A_Clipboard := ""
-	ClipLoop() ;Waits for the clipboard to receive the new text
+	ClipLoop(duration, , 25) ; Waits for the clipboard to receive the new text
 }
 
-ClipRestore()
+ClipRestore(duration := 1)
 ; Restores the saved clipboard from ClipSave
 {
-	Sleep(200) ;Prevent restoring the clipboard before the previous command has finished
+	Sleep(200) ; To prevent restoring the clipboard before the previous line has finished pasting
 	Global ClipChange
 	ClipChange := ""
 	Global ClipSaveText
 	A_Clipboard := ClipSaveText ; Restores the saved clipboard
-	ClipLoop() ; Waits for the clipboard to receive the new text
+	ClipLoop(duration, , 25) ; Waits for the clipboard to receive the new text
 }
 
-ClipLoop()
-; Loops until the clipboard receives text
+ClipLoop(duration := 1, displaytext := "Oops", increment := 15)
+; Loops until the clipboard receives the text sent by other functions
 {
-	Global ClipChange ;
+	Global ClipChange ; This comment prevents line formatting
 	cycle := 0
 	Loop {
 		ListLines(false)
@@ -245,10 +238,10 @@ ClipLoop()
 			Return
 		}
 		cycle := cycle + 0.1
-		Sleep(15)
-		If (cycle > 1) ; Timeout
+		Sleep(increment)
+		If (cycle > duration) ; Timeout
 		{
-			ToolTip("Oops"), SetTimer(ToolTip, -2000)
+			Tip(displaytext)
 			Send("{Alt Up}")
 			ListLines(true)
 			Exit()
@@ -256,22 +249,28 @@ ClipLoop()
 	}
 }
 
-; Reads the key's value from the given section of the data stream
-StreamRead(INI_section, INI_key, defaultTo := False) {
-	; Doesn't work on FAT32 files, IE, Box
-	stream_value := IniRead(A_ScriptFullPath ":Stream:$DATA", INI_section, INI_key, defaultTo)
-	Return stream_value
+ClipChanged(DataType) {
+	; Tells calling functions when the clipboard has received new text. Also saves the old clipboard each time it's changed for use with ClipBarrel
+	Global
+
+	; ClipBarrel prior_paste
+	this_paste := this_paste ?? 0
+	prior_paste := prior_paste ?? 0
+	If !(prior_paste = A_Clipboard or this_paste = A_Clipboard) {
+		prior_paste := this_paste
+	}
+	this_paste := A_Clipboard
+	ClipChange := True
 }
 
-; Writes the value to the key
-StreamWrite(INI_section, INI_key, INI_value) {
-	; Doesn't work on FAT32 files, IE, Box
-	Try {
-		IniWrite(INI_value, A_ScriptFullPath ":Stream:$DATA", INI_section, INI_key)
-	}
+Tip(tiptext := "Tip", sec := 2)
+; Displays a tooltip for (default) 2 seconds
+{
+	ToolTip(tiptext), SetTimer(ToolTip, -1000 * sec)
 }
 
 Create_Image(B64, NewHandle := True) {
+	; Seems to work better with ICO files than PNG
 	; This function adapted from Image2Include v2 by iPhilip https://www.autohotkey.com/boards/viewtopic.php?style=1&t=119966
 	Static hBitmap := 0
 	If (NewHandle)
@@ -302,6 +301,28 @@ Create_Image(B64, NewHandle := True) {
 	DllCall("Gdiplus.dll\GdiplusShutdown", "Ptr", pToken)
 	DllCall("Kernel32.dll\FreeLibrary", "Ptr", hGdip)
 	Return hBitmap
+}
+
+StreamRead(INI_section, INI_key, defaultTo := False) {
+	; Reads the key's value from the given section of the data stream
+	stream_value := IniRead(A_ScriptFullPath ":Stream:$DATA", INI_section, INI_key, defaultTo)
+	If stream_value = defaultTo {
+		Global stream_fallback
+		stream_value := IniRead(stream_fallback, INI_section, INI_key, defaultTo)
+	}
+	Return stream_value
+}
+
+StreamWrite(INI_section, INI_key, INI_value) {
+	; Writes the value to the key
+	; This will fail if the file isn't in an NTFS folder, E.G., if it's in Box Drive, which is FAT-32
+	Try {
+		IniWrite(INI_value, A_ScriptFullPath ":Stream:$DATA", INI_section, INI_key)
+	}
+	Catch {
+		Global stream_fallback
+		IniWrite(INI_value, stream_fallback, INI_section, INI_key)
+	}
 }
 
 
@@ -458,6 +479,7 @@ Select_row(row_number) {
 	}
 }
 
+
 /* ClipBarrel paste without removing the pasted item from the barrel */
 Paste_Selection(text_only := False) {
 	Global
@@ -474,7 +496,7 @@ Paste_Selection(text_only := False) {
 		}
 		Load_Clipboard(paste_clip)
 		Send("^v") ; Pastes
-		Sleep 50 ; Seems to need a rest or it tries to paste too quickly and nothing happens
+		Sleep 250 ; Seems to need a rest or it tries to paste too quickly and nothing happens
 	}
 	Global ClipBarrel_Paste := ClipboardAll()
 	ClipRestore()
@@ -484,12 +506,12 @@ Paste_Selection(text_only := False) {
  *  Sends Clip_All to the clipboard, then waits for it to be received before proceeding
  * @param Clip_All ClipboardAll object
  */
-Load_Clipboard(Clip_All, displaytext := "Oops") {
+Load_Clipboard(Clip_All, duration := 2, displaytext := "Oops") {
 	ClipSave() ; Saves the existing clipboard for later restoration
 	Global ClipChange
 	ClipChange := "" ; Tracks when the clipboard actually receives cliptext
 	A_Clipboard := Clip_All
-	ClipLoop() ; Waits for the clipboard to receive the new text
+	ClipLoop(duration, displaytext) ; Waits for the clipboard to receive the new text
 }
 
 
@@ -527,6 +549,7 @@ Update_Icons() {
 }
 
 ; CLIPCOUNTER FUNCTIONS ===================================
+
 /* Launches ClipCounter */
 ClipCounter(A_ThisMenuItem := "", A_ThisMenuItemPos := "", A_ThisMenu := "") {
 	Global
@@ -558,6 +581,8 @@ ClipCounter_Paste() {
 	}
 
 	ClipCounter_Text.Value := RegExReplace(full_message, "{([^}]+)}", "{" . incrementedCount . "}", , 1) ; Add the {} back in and increment the GUI text field
+
+	ClipBarrel.Title := Format("ClipBarrel - ClipCounter: " incrementedCount, next_line)
 }
 
 /**
@@ -650,6 +675,8 @@ ClipBarrelInitialize() {
 
 	For icon in icon_array {
 		IL_Add(ImageListID, "HBITMAP:*" . Create_Image(icon, True))
+
+		; IL_Add(ImageListID, icon, 0xFFFFFF, True) ; TODO: I think we can get rid of this line now we're using B64s instead of image files?
 	}
 
 	ClipListView.SetImageList(ImageListID, 1) ; 0 sets this image list for Large icons, unless I dyslexia'd this
@@ -790,12 +817,24 @@ Window_Resize(GuiObj := "", MinMax := "", Width := "", Height := "") {
 Change_Counting_Style(GuiObj := "", MinMax := "", Width := "", Height := "") {
 	counter_message := ClipCounter_Text.Value
 	Switch incrementStyle.Value {
-		; Numeric counting style
-		Case 1: counter_message := RegExReplace(counter_message, "{([^}]+)}", "{1}")
+		Case 1:
+		{
+			; Numeric counting style
+			counter_message := RegExReplace(counter_message, "{([^}]+)}", "{1}")
+			ClipBarrel.Title := "ClipBarrel - ClipCounter: 1"
+		}
+		Case 2:
+		{
 			; Capital letter counting style
-		Case 2: counter_message := RegExReplace(counter_message, "{([^}]+)}", "{A}")
+			counter_message := RegExReplace(counter_message, "{([^}]+)}", "{A}")
+			ClipBarrel.Title := "ClipBarrel - ClipCounter: A"
+		}
+		Case 3:
+		{
 			; Lowercase letter counting style
-		Case 3: counter_message := RegExReplace(counter_message, "{([^}]+)}", "{a}")
+			counter_message := RegExReplace(counter_message, "{([^}]+)}", "{a}")
+			ClipBarrel.Title := "ClipBarrel - ClipCounter: a"
+		}
 	}
 	ClipCounter_Text.Value := counter_message
 }
@@ -1106,7 +1145,7 @@ LV_Shrink() {
 	TraySetIcon("HBITMAP:*" . Create_Image(ClipBarrel_B64_Icon, True))
 
 }
-TrayTip("ClipBarrel is running. Use Win+C to copy text and open the GUI.", "ClipBarrel", "4 32 Mute") ; 4 uses the script's icon; 32 prevents a notification sound
+TrayTip("ClipBarrel is running. Right-click the tray icon for options.", "ClipBarrel", "4 32 Mute") ; 4 uses the script's icon; 32 prevents a notification sound
 
 Icon_1_B64 :=
 	"AAABAAEAICAAAAEAIACoEAAAFgAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAAGAPAABgDwAAAAAAAAAAAAD////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7/UVFR/1FRUf9RUVH/UVFR/1FRUf9RUVH/UVFR/1FRUf9RUVH/UVFR/1FRUf9RUVH///////////////////////////////////////////////////////f39/+xsbH/X19f/0VFRf8/Pz//Nzc3/ysrK/8+Pj7/9fX1/+Tk5P8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP////////////////+pqan/f39//3R0dP9paWn/VVVV/2hoaP/29vb/ZGRk/ysrK/8TExP/CwsL/woKCv8ICAj/BAQE/yQkJP/09PT/4ODg/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/////////////////1lZWf8lJSX/Gxsb/xUVFf8MDAz/OTk5//Ly8v9HR0f/BQUF/wMDAv8CAgH/AgIB/wICAv8CAgL/Hh4e//T09P/g4OD/q6ur/8zMzP/MzMz/o6Oj/wAAAP8AAAD/AAAA/wAAAP+jo6P/zMzM/8zMzP/MzMz/////////////////PDw8/woKCv8DAwL/AgIB/wICAv83Nzf/9PT0/01NTf8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8gICD/8/Pz/+Dg4P/W1tb////////////MzMz/AAAA/wAAAP8AAAD/AAAA/8zMzP////////////////////////////////87Ozv/CQkJ/wMDA/8CAgL/AQEB/zc3N//09PT/TU1N/wQEBP8DAwL/AgIC/wICAv8CAgL/AgIC/yEhIf/19fX/4eHh/9bW1v///////////8zMzP8AAAD/AAAA/wAAAP8AAAD/zMzM/////////////////////////////////zw8PP8KCgr/AwMC/wICAf8CAgH/NjY2//T09P9JSUn/BAQE/wMDAv8CAgH/AgIB/wICAf8CAgH/ISEh//T09P/h4eH/2dnZ////////////zMzM/wAAAP8AAAD/AAAA/wAAAP/MzMz/////////////////////////////////mpqa/4eHh/+Hh4f/g4OD/4mJif+goKD/+fn5/6ampv+FhYX/h4eH/4eHh/+FhYX/g4OD/4uLi/+Xl5f/+vr6//Dw8P/z8/P////////////MzMz/AAAA/wAAAP8AAAD/AAAA/8zMzP/////////////////////////////////6+vr//f39//7+/v/+/v7//v7+//7+/v///////v7+//39/f/+/v7//v7+//7+/v/+/v7//v7+/////////////////////////////////8zMzP8AAAD/AAAA/wAAAP8AAAD/zMzM/////////////////////////////////1dXV/8+Pj7/Ojo6/zk5Of84ODj/XV1d//b29v9oaGj/NDQ0/zs7O/84ODj/ODg4/zg4OP82Njb/UVFR//b29v/l5eX/4eHh////////////zMzM/wAAAP8AAAD/AAAA/wAAAP/MzMz/////////////////////////////////Pj4+/w4ODv8ICAj/BwcH/wcHB/81NTX/9PT0/0pKSv8ICAj/BwcH/wcHB/8HBwf/BwcH/wcHB/8oKCj/9PT0/+Hh4f/X19f////////////MzMz/AAAA/wAAAP8AAAD/AAAA/8zMzP////////////////////////////////87Ozv/CQkJ/wMDA/8CAgL/AgIC/zU1Nf/y8vL/SUlJ/wMDA/8DAwL/AgIC/wICAv8CAgL/AgIC/x8fH//09PT/4ODg/9bW1v///////////8zMzP8AAAD/AAAA/wAAAP8AAAD/zMzM/////////////////////////////////zw8PP8KCgr/AwMD/wICAv8CAgL/NTU1//Pz8/9KSkr/AwMD/wMDAv8CAgL/AgIC/wICAv8CAgL/ICAg//Ly8v/g4OD/1tbW////////////zMzM/wAAAP8AAAD/AAAA/wAAAP/MzMz/////////////////////////////////RkZG/w0NDf8DAwL/AgIB/wICAf83Nzf/8/Pz/0pKSv8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8hISH/9fX1/+Hh4f9ERET/UVFR/1FRUf88PDz/AAAA/wAAAP8AAAD/AAAA/8zMzP////////////////////////////////+YmJj/dHR0/2tra/9dXV3/QEBA/05OTv/19fX/UlJS/w0NDf8GBgb/AwMC/wICAf8CAgH/AgIB/yEhIf/09PT/4eHh/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/zMzM/////////////////////////////v7+/////////////f39/+fn5/+2trb/nJyc//j4+P+Tk5P/X19f/1RUVP9PT0//SkpK/zo6Ov8dHR3/JiYm//X19f/g4OD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP/MzMz////////////////////////////////////////////+/v7//////////////////////////////////f39//z8/P/z8/P/x8fH/3x8fP9UVFT/9fX1/+bm5v+xsbH/zMzM/5SUlP8lJSX/AAAA/wAAAP8AAAD/AAAA/8zMzP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////v7+//39/f////////////Pz8/8lJSX/AAAA/wAAAP8AAAD/zMzM///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7//f39/////////////////9nZ2f/MzMz/zMzM/8zMzP/z8/P/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -1128,3 +1167,5 @@ Icon_9_B64 :=
 	"AAABAAEAICAAAAEAIACoEAAAFgAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAAGAPAABgDwAAAAAAAAAAAAD////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7/5OTk/4WFhf9RUVH/UVFR/1FRUf9jY2P/lJSU/7+/v/////////////////////////////////////////////////////////////////////////////f39/+xsbH/X19f/0VFRf8/Pz//Nzc3/ysrK/8+Pj7/9fX1/+Tk5P+vr6//AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/yUlJf+xsbH///////////////////////////+pqan/f39//3R0dP9paWn/VVVV/2hoaP/29vb/ZGRk/ysrK/8TExP/CwsL/woKCv8ICAj/BAQE/yQkJP/09PT/4ODg/6urq/8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP90dHT//////////////////////1lZWf8lJSX/Gxsb/xUVFf8MDAz/OTk5//Ly8v9HR0f/BQUF/wMDAv8CAgH/AgIB/wICAv8CAgL/Hh4e//T09P/g4OD/q6ur/wAAAP+jo6P/zMzM/8zMzP+jo6P/UVFR/wAAAP8AAAD/AAAA/wAAAP90dHT/////////////////PDw8/woKCv8DAwL/AgIB/wICAv83Nzf/9PT0/01NTf8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8gICD/8/Pz/+Dg4P/MzMz/8/Pz////////////////////////////o6Oj/wAAAP8AAAD/AAAA/wAAAP/MzMz///////////87Ozv/CQkJ/wMDA/8CAgL/AQEB/zc3N//09PT/TU1N/wQEBP8DAwL/AgIC/wICAv8CAgL/AgIC/yEhIf/19fX/4eHh/9bW1v//////////////////////////////////////Y2Nj/wAAAP8AAAD/AAAA/2NjY////////////zw8PP8KCgr/AwMC/wICAf8CAgH/NjY2//T09P9JSUn/BAQE/wMDAv8CAgH/AgIB/wICAf8CAgH/ISEh//T09P/h4eH/2dnZ//////+xsbH/dHR0/1FRUf9RUVH/hYWF/8zMzP+/v7//AAAA/wAAAP8AAAD/AAAA//Pz8///////mpqa/4eHh/+Hh4f/g4OD/4mJif+goKD/+fn5/6ampv+FhYX/h4eH/4eHh/+FhYX/g4OD/4uLi/+Xl5f/+vr6//Dw8P/n5+f/PDw8/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/1FRUf8AAAD/AAAA/wAAAP8AAAD/zMzM///////6+vr//f39//7+/v/+/v7//v7+//7+/v///////v7+//39/f/+/v7//v7+//7+/v/+/v7//v7+/////////////////zw8PP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP+jo6P//////1dXV/8+Pj7/Ojo6/zk5Of84ODj/XV1d//b29v9oaGj/NDQ0/zs7O/84ODj/ODg4/zg4OP82Njb/UVFR//b29v+fn5//AAAA/wAAAP8AAAD/AAAA/yUlJf+jo6P/zMzM/8zMzP+UlJT/AAAA/wAAAP8AAAD/AAAA/5SUlP//////Pj4+/w4ODv8ICAj/BwcH/wcHB/81NTX/9PT0/0pKSv8ICAj/BwcH/wcHB/8HBwf/BwcH/wcHB/8oKCj/9PT0/2ZmZv8AAAD/AAAA/wAAAP8AAAD/5ubm//////////////////////8AAAD/AAAA/wAAAP8AAAD/lJSU//////87Ozv/CQkJ/wMDA/8CAgL/AgIC/zU1Nf/y8vL/SUlJ/wMDA/8DAwL/AgIC/wICAv8CAgL/AgIC/x8fH//09PT/R0dH/wAAAP8AAAD/AAAA/1FRUf///////////////////////////wAAAP8AAAD/AAAA/wAAAP+UlJT//////zw8PP8KCgr/AwMD/wICAv8CAgL/NTU1//Pz8/9KSkr/AwMD/wMDAv8CAgL/AgIC/wICAv8CAgL/ICAg//Ly8v9HR0f/AAAA/wAAAP8AAAD/UVFR///////////////////////m5ub/AAAA/wAAAP8AAAD/AAAA/7+/v///////RkZG/w0NDf8DAwL/AgIB/wICAf83Nzf/8/Pz/0pKSv8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8hISH/9fX1/3V1df8AAAD/AAAA/wAAAP8AAAD//////////////////////7Gxsf8AAAD/AAAA/wAAAP8AAAD/5ubm//////+YmJj/dHR0/2tra/9dXV3/QEBA/05OTv/19fX/UlJS/w0NDf8GBgb/AwMC/wICAf8CAgH/AgIB/yEhIf/09PT/tLS0/wAAAP8AAAD/AAAA/wAAAP90dHT////////////m5ub/AAAA/wAAAP8AAAD/AAAA/1FRUf///////v7+/////////////f39/+fn5/+2trb/nJyc//j4+P+Tk5P/X19f/1RUVP9PT0//SkpK/zo6Ov8dHR3/JiYm//X19f/g4OD/U1NT/wAAAP8AAAD/AAAA/wAAAP8lJSX/UVFR/wAAAP8AAAD/AAAA/wAAAP8AAAD/zMzM///////////////////////+/v7//////////////////////////////////f39//z8/P/z8/P/x8fH/3x8fP9UVFT/9fX1/+bm5v/T09P/UVFR/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/7Gxsf///////////////////////////////////////////////////////////////////////////////////////////////////////v7+//39/f//////sbGx/zw8PP8AAAD/AAAA/wAAAP8AAAD/AAAA/2NjY//MzMz////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7//f39//////////////////Pz8//MzMz/zMzM/8zMzP//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 Icon_0_B64 :=
 	"AAABAAEAICAAAAEAIACoEAAAFgAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAAGAPAABgDwAAAAAAAAAAAAD////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7//f39////////////v7+//4WFhf9RUVH/UVFR/1FRUf+FhYX/v7+///////////////////////////////////////////////////////////////////f39/+xsbH/X19f/0VFRf8/Pz//Nzc3/ysrK/8+Pj7/9fX1/+Tk5P/b29v/2dnZ/zw8PP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/JSUl/9nZ2f////////////////+pqan/f39//3R0dP9paWn/VVVV/2hoaP/29vb/ZGRk/ysrK/8TExP/CwsL/woKCv8ICAj/BAQE/yQkJP/09PT/4ODg/8zMzP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/+bm5v///////////1lZWf8lJSX/Gxsb/xUVFf8MDAz/OTk5//Ly8v9HR0f/BQUF/wMDAv8CAgH/AgIB/wICAv8CAgL/Hh4e//T09P/g4OD/YWFh/wAAAP8AAAD/AAAA/wAAAP+UlJT/zMzM/5SUlP8AAAD/AAAA/wAAAP8AAAD/UVFR////////////PDw8/woKCv8DAwL/AgIB/wICAv83Nzf/9PT0/01NTf8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8gICD/8/Pz/9XV1f8AAAD/AAAA/wAAAP8AAAD/lJSU/////////////////5SUlP8AAAD/AAAA/wAAAP8AAAD/5ubm//////87Ozv/CQkJ/wMDA/8CAgL/AQEB/zc3N//09PT/TU1N/wQEBP8DAwL/AgIC/wICAv8CAgL/AgIC/yEhIf/19fX/qKio/wAAAP8AAAD/AAAA/wAAAP/Z2dn/////////////////5ubm/wAAAP8AAAD/AAAA/wAAAP+xsbH//////zw8PP8KCgr/AwMC/wICAf8CAgH/NjY2//T09P9JSUn/BAQE/wMDAv8CAgH/AgIB/wICAf8CAgH/ISEh//T09P+Dg4P/AAAA/wAAAP8AAAD/AAAA////////////////////////////AAAA/wAAAP8AAAD/AAAA/5SUlP//////mpqa/4eHh/+Hh4f/g4OD/4mJif+goKD/+fn5/6ampv+FhYX/h4eH/4eHh/+FhYX/g4OD/4uLi/+Xl5f/+vr6/21tbf8AAAD/AAAA/wAAAP8lJSX///////////////////////////9RUVH/AAAA/wAAAP8AAAD/UVFR///////6+vr//f39//7+/v/+/v7//v7+//7+/v///////v7+//39/f/+/v7//v7+//7+/v/+/v7//v7+////////////UVFR/wAAAP8AAAD/AAAA/1FRUf///////////////////////////1FRUf8AAAD/AAAA/wAAAP9RUVH//////1dXV/8+Pj7/Ojo6/zk5Of84ODj/XV1d//b29v9oaGj/NDQ0/zs7O/84ODj/ODg4/zg4OP82Njb/UVFR//b29v9JSUn/AAAA/wAAAP8AAAD/UVFR////////////////////////////UVFR/wAAAP8AAAD/AAAA/1FRUf//////Pj4+/w4ODv8ICAj/BwcH/wcHB/81NTX/9PT0/0pKSv8ICAj/BwcH/wcHB/8HBwf/BwcH/wcHB/8oKCj/9PT0/0hISP8AAAD/AAAA/wAAAP9RUVH///////////////////////////9RUVH/AAAA/wAAAP8AAAD/UVFR//////87Ozv/CQkJ/wMDA/8CAgL/AgIC/zU1Nf/y8vL/SUlJ/wMDA/8DAwL/AgIC/wICAv8CAgL/AgIC/x8fH//09PT/goKC/wAAAP8AAAD/AAAA/wAAAP///////////////////////////zw8PP8AAAD/AAAA/wAAAP90dHT//////zw8PP8KCgr/AwMD/wICAv8CAgL/NTU1//Pz8/9KSkr/AwMD/wMDAv8CAgL/AgIC/wICAv8CAgL/ICAg//Ly8v+Pj4//AAAA/wAAAP8AAAD/AAAA////////////////////////////AAAA/wAAAP8AAAD/AAAA/5SUlP//////RkZG/w0NDf8DAwL/AgIB/wICAf83Nzf/8/Pz/0pKSv8EBAT/AwMC/wICAv8CAgL/AgIC/wICAv8hISH/9fX1/7+/v/8AAAD/AAAA/wAAAP8AAAD/v7+//////////////////8zMzP8AAAD/AAAA/wAAAP8AAAD/zMzM//////+YmJj/dHR0/2tra/9dXV3/QEBA/05OTv/19fX/UlJS/w0NDf8GBgb/AwMC/wICAf8CAgH/AgIB/yEhIf/09PT/4eHh/x8fH/8AAAD/AAAA/wAAAP88PDz/8/Pz///////z8/P/PDw8/wAAAP8AAAD/AAAA/wAAAP///////v7+/////////////f39/+fn5/+2trb/nJyc//j4+P+Tk5P/X19f/1RUVP9PT0//SkpK/zo6Ov8dHR3/JiYm//X19f/g4OD/oKCg/wAAAP8AAAD/AAAA/wAAAP8AAAD/UVFR/wAAAP8AAAD/AAAA/wAAAP8AAAD/o6Oj///////////////////////+/v7//////////////////////////////////f39//z8/P/z8/P/x8fH/3x8fP9UVFT/9fX1/+bm5v/e3t7/dHR0/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/3R0dP///////////////////////////////////////////////////////////////////////////////////////////////////////v7+//39/f//////v7+//zw8PP8AAAD/AAAA/wAAAP8AAAD/AAAA/zw8PP+/v7/////////////////////////////////////////////////////////////////////////////////////////////////////////////+/v7//f39//////////////////Pz8//MzMz/zMzM/8zMzP/z8/P/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+; TODO > Finalize: Update Reddit post with new link: https://www.reddit.com/r/AutoHotkey/comments/1etli7g/what_are_some_useful_tools_i_can_add/
