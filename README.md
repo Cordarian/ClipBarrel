@@ -22,6 +22,8 @@ ClipBarrel is an [AutoHotkey v2](https://www.autohotkey.com/) clipboard manager 
 ## ClipCounter
 ClipCounter increments the number/letter inside the {braces} with each paste, E.G., "Chapter 1", "Chapter 2", "Chapter 3". Count by numbers, uppercase, or lowercase letters, and increment by any number of steps. Currently lacks data validation, so play nice.
 
-## How does it work?
+## Run at Startup
+To run ClipBarrel automatically when your computer starts, place the .exe or .ahk file into the File Explorer folder located at `%appdata%\Microsoft\Windows\Start Menu\Programs\Startup`
 
+## How does it work?
 This stand-alone tool is written in AutoHotkey v2. You can download and run the .exe file by itself, or view the whole code in the .ahk file, which can be run without the .exe [using AutoHotkey](https://www.autohotkey.com/docs/v2/Tutorial.htm#s11).
