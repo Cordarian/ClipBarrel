@@ -1,16 +1,16 @@
 # ClipBarrel
-ClipBarrel is an [AutoHotkey v2](https://www.autohotkey.com/) clipboard extender that works alongside the normal Windows clipboard, letting you save multiple copied items and paste them in any order, all visible from a GUI window. It uses familiar hotkeys as Windows' normal copy/cut/paste, just swapping the Control key for the ⊞ Windows key, so Control+C becomes ⊞ Windows+C to copy to the ClipBarrel.
+ClipBarrel is an [AutoHotkey v2](https://www.autohotkey.com/) clipboard extender that works alongside the normal Windows clipboard, letting you save multiple copied items and paste them in any order, all visible from a GUI window. It uses familiar hotkeys as Windows' normal copy/cut/paste, just swapping the Control key for the ⊞ Windows key, so `Control+C` becomes `⊞ Windows+C` to copy to the ClipBarrel.
 
 ![GIF showing ClipBarrel cut some text, split it into separate items, and paste a sentence in order using destructive and non-destructive pastes.](https://github.com/Cordarian/ClipBarrel/blob/main/ClipBarrel%20demo.gif?raw=true)
 
 ## Hotkeys
-- **⊞ Win+c**: Copy to ClipBarrel
-- **⊞ Win+x**: Cut to ClipBarrel
-- **⊞ Win+v**: Paste from ClipBarrel
-- **⊞ Win+(any digit)**: Pastes the item at that list number
-- **⊞ Win+b**: Paste from ClipBarrel without removing the pasted item (non-destructively)
-- **⊞ Win+Control+v/b**: Pastes all ClipBarrel entries/Paste all items non-destructively
-- **⊞ Win+z**: Re-paste the previous item
+- `⊞ Win+c`: Copy to ClipBarrel
+- `⊞ Win+x`: Cut to ClipBarrel
+- `⊞ Win+v`: Paste from ClipBarrel
+- `⊞ Win+(any digit)`: Pastes the item at that list number
+- `⊞ Win+b`: Paste from ClipBarrel without removing the pasted item (non-destructively)
+- `⊞ Win+Control+v/b`: Pastes all ClipBarrel entries/Paste all items non-destructively
+- `⊞ Win+z`: Re-paste the previous item
 
 ## GUI Features
 - **Ghost**: Make GUI transparent when the window isn't focused
