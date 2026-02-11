@@ -1,5 +1,5 @@
 ; =========================================================
-; DIRECTIVES
+; 						DIRECTIVES
 ; =========================================================
 #Requires Autohotkey v2.0+
 #SingleInstance Force ; Prevents multiple versions of script running
@@ -7,7 +7,7 @@
 OnClipboardChange ClipChanged
 
 ; =========================================================
-; VARIABLES
+; 						VARIABLES
 ; =========================================================
 Global Cliptionary := Map()
 /*
@@ -36,7 +36,7 @@ Global transparency_level := 150
 
 
 ; =========================================================
-; HOTKEYS
+; 						HOTKEYS
 ; =========================================================
 #HotIf ; Universal hotkeys
 
@@ -200,7 +200,7 @@ Global transparency_level := 150
 
 
 ; =========================================================
-; FUNCTIONS
+; 						FUNCTIONS
 ; =========================================================
 ; GENERAL =================================================
 ClipSave(duration := 1)
@@ -609,7 +609,7 @@ clipLetters(in_Letter, incrementStep, capitalized := False) {
 
 
 ; =========================================================
-; ClipBarrel GUI
+; 						ClipBarrel GUI
 ; =========================================================
 ClipBarrelInitialize() {
 	Global
@@ -777,7 +777,7 @@ ClipBarrelInitialize() {
 }
 
 ; =========================================================
-; GUI FUNCTIONS/EVENTS
+; 					GUI FUNCTIONS/EVENTS
 ; =========================================================
 Window_Resize(GuiObj := "", MinMax := "", Width := "", Height := "") {
 	; Called whenever an LV item is added, the window is resized, or manually called
@@ -1134,7 +1134,7 @@ LV_Shrink() {
 
 
 ; =========================================================
-; TRAY ICON/NUMBER ICONS
+; 					TRAY ICON/NUMBER ICONS
 ; =========================================================
 ; Icons generated using Image2Include v2 by iPhilip https://www.autohotkey.com/boards/viewtopic.php?style=1&t=119966
 {
